@@ -1,0 +1,94 @@
+from ....Kernel.Components.Vectors import Vec2
+from ....Kernel.Memory import GetMemoryLoad
+from ....Kernel.Kernel import render_items, LogWrapper
+from ....Input.Mouse import _Mouse
+from ....Misc.Timer import Timer
+from ..imgui_flags import Flags
+from ..imgui import Begin, Label, SameLine, CheckBox
+import threading
+import random
+
+@LogWrapper
+class InfoMonitor:
+    def __init__(self, window):
+        self.rss = 0.0
+        self.vms = 0.0
+        self.peak = 0.0
+        self.winsize = Vec2(0.0, 0.0)
+        self.mousepos = Vec2(0.0, 0.0)
+        self.threads = []
+        self.render_objs = []
+        self.fps = 0.0
+        self.delta = 0.0
+
+        self.window = window
+        self.Timer = Timer(1, self._update_info)
+
+        self.wireframe_enabled = False
+        self.notexture_enabled = False
+        self.normals_enabled = False
+        self.notexnormals_enabled = False
+        self.show_only_fps_enabled = False
+
+        self.onlyfps_menu_id = random.randint(0, 100000)
+    
+    def _update_info(self):
+        if self.show_only_fps_enabled:
+            self.fps = self.window.GetFPS()
+            return
+
+        # Memory
+        data = GetMemoryLoad()
+        self.rss = data["rss"]
+        self.vms = data["vms"]
+        self.peak = data["peak"]
+
+        del data
+
+        # Window
+        self.winsize = self.window.current_window_sizes
+        self.mousepos = _Mouse.GetPosition()
+        self.threads = threading.activeCount()
+        self.render_objs = render_items
+        self.fps = self.window.GetFPS()
+        self.delta = self.window.GetDelta()
+
+    def Render(self):
+        self.Timer.Process()
+
+        if self.show_only_fps_enabled:
+            with Begin(f"##{self.onlyfps_menu_id}"):
+                Label(f"FPS:{self.fps:.2f}")
+                _, self.show_only_fps_enabled = CheckBox("Show only fps", self.show_only_fps_enabled)
+
+            return
+
+        # Render
+        with Begin("Memory", Vec2(20, 20), Vec2(320, 60), False, Flags.WINDOW_NO_MOVE | Flags.WINDOW_NO_RESIZE | Flags.WINDOW_NO_COLLAPSE | Flags.WINDOW_NO_INPUTS):
+            Label(f"RSS:{self.rss:.2f}MB")
+            SameLine()
+            Label(f"VMS:{self.vms:.2f}MB")
+            SameLine()
+            Label(f"PEAK:{self.peak:.2f}MB")
+
+        with Begin("Window", Vec2(20, 100), Vec2(320, 140), False, Flags.WINDOW_NO_MOVE | Flags.WINDOW_NO_RESIZE | Flags.WINDOW_NO_COLLAPSE | Flags.WINDOW_NO_INPUTS):
+            Label(f"FPS:{self.fps:.2f}")
+            Label(f"Delta:{self.delta:.8f}")
+            Label(f"Window size:{int(self.winsize.x)}x{int(self.winsize.y)}")
+            Label(f"Mouse position X:{int(self.mousepos.x)} Y:{int(self.mousepos.y)}")
+            Label(f"Render objects:{len(self.render_objs)}")
+            Label(f"Threads:{self.threads}")
+
+        with Begin("Debug", Vec2(20, 260), Vec2(320, 140), False):
+            Label("Render:")
+            _wireframe, self.wireframe_enabled = CheckBox("Wireframe", self.wireframe_enabled)
+            _, self.notexture_enabled = CheckBox("No texture", self.notexture_enabled)
+            _, self.normals_enabled = CheckBox("Show normals", self.normals_enabled)
+            _, self.show_only_fps_enabled = CheckBox("Show only fps", self.show_only_fps_enabled)
+
+            if self.normals_enabled:
+                _, self.notexnormals_enabled = CheckBox("Disable textures on normal", self.notexnormals_enabled)
+
+            if _wireframe:
+                ctx = self.window.window_renderer.context
+                ctx.wireframe = self.wireframe_enabled

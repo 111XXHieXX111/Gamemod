@@ -1,0 +1,8 @@
+ModernGL
+imgui
+glfw
+psutil
+pyglm
+pillow
+sounddevice
+soundfile
